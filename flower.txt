@@ -1,0 +1,169 @@
+import numpy as np
+import tensorflow as tf
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
+from sklearn.metrics import confusion_matrix, classification_report, accuracy_score, precision_score, recall_score, f1_score
+import matplotlib.pyplot as plt
+import matplotlib.image as mpimg
+import seaborn as sns
+
+# Data generators
+
+# Create an ImageDataGenerator object for the training data
+# This generator rescales pixel values to the range [0, 1],
+# and also applies random transformations like shear, zoom, and horizontal flip for augmentation.
+train_datagen = ImageDataGenerator(
+    rescale=1./255,
+    shear_range=0.2,
+    zoom_range=0.2,
+    horizontal_flip=True)
+
+# Load and preprocess images from the 'training_set' directory using the generator
+# Images are resized to 64x64 pixels, batched, and labeled using categorical encoding.
+training_set = train_datagen.flow_from_directory(
+    'training_set',
+    target_size=(64, 64),
+    batch_size=32,
+    class_mode='categorical')
+
+# Create an ImageDataGenerator object for the test data
+# This generator only rescales pixel values to the range [0, 1] without augmentation.
+test_datagen = ImageDataGenerator(rescale=1./255)
+
+# Load and preprocess images from the 'test_set' directory using the generator
+# Images are resized to 64x64 pixels, batched, and labeled using categorical encoding.
+test_set = test_datagen.flow_from_directory(
+    'test_set',
+    target_size=(64, 64),
+    batch_size=32,
+    class_mode='categorical')
+
+# Building the CNN
+
+# Initialize the CNN model using Keras Sequential API
+cnn = tf.keras.models.Sequential([
+    # First convolutional layer with 64 filters, kernel size of 3x3, and ReLU activation function
+    tf.keras.layers.Conv2D(filters=64, kernel_size=3, activation='relu', input_shape=[64, 64, 3]),
+    # Max pooling layer with a 2x2 window, reducing the spatial dimensions
+    tf.keras.layers.MaxPool2D(pool_size=2, strides=2),
+
+    # Second convolutional layer with 64 filters, kernel size of 3x3, and ReLU activation function
+    tf.keras.layers.Conv2D(filters=64, kernel_size=3, activation='relu'),
+    # Second max pooling layer with a 2x2 window
+    tf.keras.layers.MaxPool2D(pool_size=2, strides=2),
+
+    # Dropout layer to prevent overfitting by randomly setting a fraction of input units to 0
+    tf.keras.layers.Dropout(0.5),
+
+    # Flatten layer to convert the 2D matrix of features into a 1D vector
+    tf.keras.layers.Flatten(),
+
+    # Fully connected layer with 128 units and ReLU activation
+    tf.keras.layers.Dense(units=128, activation='relu'),
+
+    # Output layer with 5 units (for 5 classes) and softmax activation for multi-class classification
+    tf.keras.layers.Dense(units=5, activation='softmax')
+])
+
+# Compile the CNN model
+# Optimizer: RMSprop - efficient for deep neural networks
+# Loss function: Categorical cross-entropy - suitable for multi-class classification
+# Metrics: Accuracy - to monitor the training and validation steps
+cnn.compile(optimizer='rmsprop', loss='categorical_crossentropy', metrics=['accuracy'])
+
+# Train the CNN model on the training data and validate it on the test data
+# This will run for 10 epochs, meaning the model will see the entire dataset 10 times
+cnn.fit(x=training_set, validation_data=test_set, epochs=10)
+
+# Making predictions on the test set
+
+# Predict class probabilities on the test set
+Y_pred = cnn.predict(test_set)
+
+# Convert predicted probabilities to class labels (the index of the max probability)
+y_pred = np.argmax(Y_pred, axis=1)
+
+# Get true labels from the test set
+y_true = test_set.classes
+
+# Calculate metrics
+
+# Generate a confusion matrix, which shows the counts of true vs. predicted labels
+conf_matrix = confusion_matrix(y_true, y_pred)
+
+# Generate a detailed classification report including precision, recall, f1-score for each class
+class_report = classification_report(y_true, y_pred, target_names=list(training_set.class_indices.keys()))
+
+# Calculate overall accuracy, precision, recall, and f1-score using weighted averaging
+accuracy = accuracy_score(y_true, y_pred)
+precision = precision_score(y_true, y_pred, average='weighted')
+recall = recall_score(y_true, y_pred, average='weighted')
+f1 = f1_score(y_true, y_pred, average='weighted')
+
+# Print metrics
+
+# Display the confusion matrix
+print("Confusion Matrix:")
+print(conf_matrix)
+
+# Display the classification report
+print("\nClassification Report:")
+print(class_report)
+
+# Display overall accuracy, precision, recall, and F1 score
+print(f"Accuracy: {accuracy}")
+print(f"Precision: {precision}")
+print(f"Recall: {recall}")
+print(f"F1 Score: {f1}")
+
+# Plot confusion matrix
+
+# Plot the confusion matrix as a heatmap for easier interpretation
+plt.figure(figsize=(10, 7))
+sns.heatmap(conf_matrix, annot=True, fmt='d', cmap='Blues',
+            xticklabels=list(training_set.class_indices.keys()),
+            yticklabels=list(training_set.class_indices.keys()))
+plt.ylabel('Actual')
+plt.xlabel('Predicted')
+plt.show()
+
+# Single prediction
+
+# Import image module from Keras for loading and preprocessing a single image
+from keras.preprocessing import image
+
+# Specify the path of the image you want to predict
+image_path = 'prediction/s.jpg'
+
+# Load the image with the same target size as used during training
+test_image = image.load_img(image_path, target_size=(64, 64))
+
+# Convert the image to an array format that the model can process
+test_image = image.img_to_array(test_image)
+
+# Expand the dimensions of the image array to match the input shape expected by the model
+test_image = np.expand_dims(test_image, axis=0)
+
+# Make a prediction on the single image
+result = cnn.predict(test_image)
+
+# Print the predicted class based on the highest probability
+if result[0][0] == 1:
+    print('Daisy')
+elif result[0][1] == 1:
+    print('Dandelion')
+elif result[0][2] == 1:
+    print('Rose')
+elif result[0][3] == 1:
+    print('SunFlower')
+elif result[0][4] == 1:
+    print("Tulip")
+
+# Print the raw prediction probabilities
+print(result)
+
+# Display the image
+
+# Load the image using Matplotlib's image module and display it
+img = mpimg.imread(image_path)
+imgplot = plt.imshow(img)
+plt.show()
